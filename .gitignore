@@ -1,0 +1,23 @@
+# build artifacts
+.DS_Store
+sim/build/*.cc
+sim/build/*_sim
+sim/build/eng_sim
+sim/build/obj_dir/
+*.o
+*.vvp
+*.vcd
+
+# python
+__pycache__/
+*.pyc
+
+# vivado / vendor
+*.jou
+*.log
+.Xil/
+vivado*/
+*.cache/
+*.runs/
+*.hw/
+*.ip_user_files/

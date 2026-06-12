@@ -1,0 +1,10 @@
+fundamental_bin 1
+peak_bin 1
+thd_percent 35.97
+harmonic_1_bin 1 mag 9824
+harmonic_2_bin 2 mag 13
+harmonic_3_bin 3 mag 2967
+harmonic_4_bin 4 mag 3
+harmonic_5_bin 5 mag 1647
+harmonic_6_bin 6 mag 5
+harmonic_7_bin 7 mag 984
