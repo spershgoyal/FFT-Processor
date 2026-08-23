@@ -1,4 +1,4 @@
-# Hardware FFT Processor (SPECTRA)
+# Hardware FFT Processor
 
 A hardware FFT processor for real-time spectrum analysis.
 
