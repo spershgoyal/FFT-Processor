@@ -21,7 +21,7 @@ no hand-waving. `make verify` reproduces it from scratch.
 
 ---
 
-## Why it is built the way it is
+## Methodology/reasoning
 
 **Why fixed-point (Q1.15)?** An FPGA has no free floating-point unit, and ADC
 samples arrive as integers. Every value here is a signed 16-bit number
