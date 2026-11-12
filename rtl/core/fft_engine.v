@@ -45,7 +45,12 @@
 module fft_engine #(
     parameter integer N        = 256,
     parameter         TW_RE    = "rtl/generated/twiddle_re_256.mem",
-    parameter         TW_IM    = "rtl/generated/twiddle_im_256.mem"
+    parameter         TW_IM    = "rtl/generated/twiddle_im_256.mem",
+    // 0: divide by 2 after every stage (output = DFT / N), the original scheme
+    // 1: block floating point. A stage is only divided by 2 when the data is
+    //    large enough that it could overflow, and out_exp reports how many
+    //    stages were scaled, so the true DFT = output * 2^out_exp.
+    parameter integer BFP      = 0
 )(
     input  wire                       clk,
     input  wire                       rst,        // synchronous, active high
@@ -61,6 +66,7 @@ module fft_engine #(
     output reg  signed [`SPEC_DW-1:0] out_re,
     output reg  signed [`SPEC_DW-1:0] out_im,
     output reg                        out_last,
+    output reg         [4:0]          out_exp,    // block exponent (== log2 N when BFP=0)
     // status -----------------------------------------------------------------
     output reg                        busy,
     output reg                        done        // 1-cycle pulse at frame end
@@ -122,6 +128,23 @@ module fft_engine #(
     reg [AW:0]     op_cnt;            // output counter 0..N
     reg signed [`SPEC_DW-1:0] top_re, top_im;     // captured X[p]
 
+    // ---- block floating point bookkeeping ----------------------------------
+    // A radix-2 butterfly can at most double the complex magnitude of its
+    // inputs. If every real and imaginary part entering a stage is below 0.25
+    // in absolute value, the magnitude is below 0.25*sqrt(2) = 0.354, the
+    // outputs stay below 0.707, and the stage can run with no scaling. "Below
+    // 0.25" is simply "the top three bits are all equal", so the test is free.
+    function big;
+        input signed [`SPEC_DW-1:0] v;
+        begin
+            big = (v[`SPEC_DW-1 -: 3] != 3'b000) && (v[`SPEC_DW-1 -: 3] != 3'b111);
+        end
+    endfunction
+    reg       scale;                  // divide this stage by 2
+    reg       big_acc;                // some value written so far needs headroom
+    reg [4:0] exp;                    // stages scaled so far in this frame
+    wire      do_scale = (BFP == 0) ? 1'b1 : scale;
+
     // ---- combinational butterfly index maths -------------------------------
     wire [AW-1:0] idx_p  = ((bf >> (s-1)) << s) + (bf & ((1 << (s-1)) - 1));
     wire [AW-1:0] idx_q  = idx_p + (1 << (s-1));
@@ -150,8 +173,10 @@ module fft_engine #(
         a_we    = 1'b0;  b_we = 1'b0;
         a_addr  = idx_p; b_addr = idx_q;
         tw_addr = idx_tw;
-        a_wd_re = sum_re[`SPEC_DW:1];   a_wd_im = sum_im[`SPEC_DW:1];  // top'/2
-        b_wd_re = dif_re[`SPEC_DW:1];   b_wd_im = dif_im[`SPEC_DW:1];  // bot'/2
+        a_wd_re = do_scale ? sum_re[`SPEC_DW:1] : sum_re[`SPEC_DW-1:0];
+        a_wd_im = do_scale ? sum_im[`SPEC_DW:1] : sum_im[`SPEC_DW-1:0];
+        b_wd_re = do_scale ? dif_re[`SPEC_DW:1] : dif_re[`SPEC_DW-1:0];
+        b_wd_im = do_scale ? dif_im[`SPEC_DW:1] : dif_im[`SPEC_DW-1:0];
 
         case (state)
             S_LOAD: begin                     // write streamed sample
@@ -170,6 +195,10 @@ module fft_engine #(
         endcase
     end
 
+    // values being written this cycle (input sample in LOAD, results in MUL)
+    wire in_big = big(in_re) | big(in_im);
+    wire wr_big = big(a_wd_re) | big(a_wd_im) | big(b_wd_re) | big(b_wd_im);
+
     // ======================================================================
     //  Sequential control
     // ======================================================================
@@ -178,6 +207,7 @@ module fft_engine #(
             state <= S_IDLE; busy <= 1'b0; done <= 1'b0;
             out_valid <= 1'b0; out_last <= 1'b0;
             ld_cnt <= 0; s <= 1; bf <= 0; op_cnt <= 0;
+            scale <= 1'b1; big_acc <= 1'b0; exp <= 5'd0; out_exp <= 5'd0;
         end else begin
             done      <= 1'b0;
             out_valid <= 1'b0;
@@ -186,12 +216,21 @@ module fft_engine #(
             case (state)
             S_IDLE: begin
                 busy <= 1'b0;
-                if (start) begin busy <= 1'b1; ld_cnt <= 0; state <= S_LOAD; end
+                if (start) begin
+                    busy <= 1'b1; ld_cnt <= 0; state <= S_LOAD;
+                    big_acc <= 1'b0; exp <= 5'd0;
+                end
             end
 
             S_LOAD: if (in_valid) begin
-                if (ld_cnt == N-1) begin s <= 1; bf <= 0; state <= S_RD; end
-                else                     ld_cnt <= ld_cnt + 1'b1;
+                if (ld_cnt == N-1) begin
+                    s <= 1; bf <= 0; state <= S_RD;
+                    scale   <= big_acc | in_big;      // decision for stage 1
+                    big_acc <= 1'b0;
+                end else begin
+                    ld_cnt  <= ld_cnt + 1'b1;
+                    big_acc <= big_acc | in_big;
+                end
             end
 
             S_RD: state <= S_LD;              // addresses presented this cycle
@@ -203,8 +242,12 @@ module fft_engine #(
             end
 
             S_MUL: begin                      // results written this cycle
+                big_acc <= big_acc | wr_big;
                 if (bf == HALF-1) begin
                     bf <= 0;
+                    exp     <= exp + {4'd0, do_scale};
+                    scale   <= big_acc | wr_big;      // decision for the next stage
+                    big_acc <= 1'b0;
                     if (s == STAGES) begin op_cnt <= 0; state <= S_OUT; end
                     else             begin s <= s + 1'b1; state <= S_RD; end
                 end else begin
@@ -220,6 +263,7 @@ module fft_engine #(
                     out_re    <= a_rd_re;
                     out_im    <= a_rd_im;
                     out_last  <= (op_cnt == N);
+                    out_exp   <= exp;
                 end
                 if (op_cnt == N) state <= S_DONE;
                 else             op_cnt <= op_cnt + 1'b1;

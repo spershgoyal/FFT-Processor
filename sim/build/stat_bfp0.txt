@@ -1,0 +1,127 @@
+
+10. Printing statistics.
+
+=== $paramod$2d1ae9ad81bd9d288b8782307dd69cacc37ab08f\rom ===
+
+        +----------Local Count, excluding submodules.
+        | 
+        9 wires
+      204 wire bits
+        3 public wires
+       24 public wire bits
+        3 ports
+       24 port bits
+        1 cells
+        1   RAMB18E1
+
+=== $paramod$c89e0fd8cd88c3a0576fc1aa79802e41d584e473\tdp_ram ===
+
+        +----------Local Count, excluding submodules.
+        | 
+       15 wires
+      263 wire bits
+        9 public wires
+       83 public wire bits
+        9 ports
+       83 port bits
+        1 cells
+        1   RAMB18E1
+
+=== $paramod$ee57478af871cfe95b5d133090752afe080ef84e\rom ===
+
+        +----------Local Count, excluding submodules.
+        | 
+        9 wires
+      204 wire bits
+        3 public wires
+       24 public wire bits
+        3 ports
+       24 port bits
+        1 cells
+        1   RAMB18E1
+
+=== cmul_q15 ===
+
+        +----------Local Count, excluding submodules.
+        | 
+      222 wires
+      725 wire bits
+       11 public wires
+      161 public wire bits
+        9 ports
+       99 port bits
+       66 cells
+       31   $_NOT_
+       31   $_XOR_
+        4   DSP48E1
+       41 submodules
+        8   CARRY4
+       33   FDRE
+
+=== fft_engine ===
+
+        +----------Local Count, excluding submodules.
+        | 
+     1097 wires
+     3203 wire bits
+       58 public wires
+      611 public wire bits
+       15 ports
+       86 port bits
+      679 cells
+       76   $_AND_
+      242   $_MUX_
+       96   $_NOT_
+       99   $_OR_
+       80   $_XOR_
+       36   IBUF
+       50   OBUF
+      178 submodules
+        1   $paramod$2d1ae9ad81bd9d288b8782307dd69cacc37ab08f\rom
+        2   $paramod$c89e0fd8cd88c3a0576fc1aa79802e41d584e473\tdp_ram
+        1   $paramod$ee57478af871cfe95b5d133090752afe080ef84e\rom
+       46   CARRY4
+      126   FDRE
+        1   FDSE
+        1   cmul_q15
+
+=== design hierarchy ===
+
+        +----------Count including submodules.
+        | 
+      749 fft_engine
+        1 $paramod$2d1ae9ad81bd9d288b8782307dd69cacc37ab08f\rom
+        1 $paramod$c89e0fd8cd88c3a0576fc1aa79802e41d584e473\tdp_ram
+        1 $paramod$ee57478af871cfe95b5d133090752afe080ef84e\rom
+       66 cmul_q15
+
+        +----------Count including submodules.
+        | 
+     1367 wires
+     4862 wire bits
+       93 public wires
+      986 public wire bits
+       48 ports
+      399 port bits
+        - memories
+        - memory bits
+        - processes
+      749 cells
+       76   $_AND_
+      242   $_MUX_
+      127   $_NOT_
+       99   $_OR_
+      111   $_XOR_
+        4   DSP48E1
+       36   IBUF
+       50   OBUF
+        4   RAMB18E1
+      178 submodules
+        1   $paramod$2d1ae9ad81bd9d288b8782307dd69cacc37ab08f\rom
+        2   $paramod$c89e0fd8cd88c3a0576fc1aa79802e41d584e473\tdp_ram
+        1   $paramod$ee57478af871cfe95b5d133090752afe080ef84e\rom
+       46   CARRY4
+      126   FDRE
+        1   FDSE
+        1   cmul_q15
+

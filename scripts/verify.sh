@@ -11,6 +11,7 @@
 #              fft_mag spectrum         bit-exact vs golden
 #              electrical THD/harmonics vs golden (~36% THD)
 #              2D FFT image spectrum     bit-exact vs golden
+#              block floating point      bins + exponent bit-exact, 39 frames
 # ===========================================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -47,21 +48,26 @@ build_run () { # $1 tb.cc  $2 sim.cc  $3 exe
 }
 
 fail=0
-echo "==> [1/4] FFT engine (complex, bit-exact)"
+echo "==> [1/5] FFT engine (complex, bit-exact)"
 cxx fft_engine "$CORE" sim/build/fft_engine.cc
 build_run sim/tb/tb_engine_cxxrtl.cc sim/build/fft_engine.cc sim/build/eng_sim || fail=1
 
-echo "==> [2/4] fft_mag spectrum (bit-exact)"
+echo "==> [2/5] fft_mag spectrum (bit-exact)"
 cxx fft_mag "$CORE" sim/build/fft_mag.cc
 build_run sim/tb/tb_fft_cxxrtl.cc sim/build/fft_mag.cc sim/build/fft_sim || fail=1
 
-echo "==> [3/4] electrical diagnostics (THD / harmonics)"
+echo "==> [3/5] electrical diagnostics (THD / harmonics)"
 cxx spectrum_elec "$CORE $APPS" sim/build/spectrum_elec.cc
 build_run sim/tb/tb_elec_cxxrtl.cc sim/build/spectrum_elec.cc sim/build/elec_sim || fail=1
 
-echo "==> [4/4] 2D FFT vision (bit-exact image spectrum)"
+echo "==> [4/5] 2D FFT vision (bit-exact image spectrum)"
 cxx fft2d "$CORE $APPS" sim/build/fft2d.cc
 build_run sim/tb/tb_fft2d_cxxrtl.cc sim/build/fft2d.cc sim/build/fft2d_sim || fail=1
+
+echo "==> [5/5] FFT engine, block floating point (39 frames, bins + exponent bit-exact)"
+python3 tools/bfp_study.py > sim/build/bfp_study.log
+$YOSYS -p "read_verilog -sv -I rtl/core $CORE; chparam -set BFP 1 fft_engine; hierarchy -check -top fft_engine; proc; write_cxxrtl sim/build/fft_engine_bfp.cc" >/dev/null 2>&1
+build_run sim/tb/tb_bfp_cxxrtl.cc sim/build/fft_engine_bfp.cc sim/build/bfp_sim || fail=1
 
 echo
 [ "$fail" = 0 ] && echo "ALL RTL TESTS PASSED" || { echo "SOME TESTS FAILED"; exit 1; }

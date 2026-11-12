@@ -49,6 +49,51 @@ magnitudes.)
 
 ---
 
+## Block floating point (BFP)
+
+The original engine divides by 2 after every stage. That can never overflow,
+but it costs a quiet signal one bit of precision per stage whether the headroom
+was needed or not. Building `fft_engine` with `BFP = 1` makes the scaling
+conditional:
+
+- A radix-2 butterfly can at most double the complex magnitude of its inputs.
+- If every real and imaginary part entering a stage is below 0.25, the outputs
+  stay below 0.707 and the stage runs with no scaling.
+- "Below 0.25" in Q1.15 is "the top three bits are equal", so the check is a few
+  gates on the values already being written to RAM.
+- `out_exp` reports how many stages were scaled. True DFT = output x 2^`out_exp`.
+
+With `BFP = 0` (the default) the engine is bit-identical to before and
+`out_exp` reads 8.
+
+**Measured effect** (`python3 tools/bfp_study.py`, SQNR against a float FFT of
+the same quantized input, 256 points):
+
+| Input level | Tone, divide every stage | Tone, BFP | Noise, divide every stage | Noise, BFP |
+|---|---|---|---|---|
+| 0 dBFS | 63.2 dB | 63.2 dB | 53.7 dB | 63.0 dB |
+| -12 dBFS | 50.5 dB | 62.1 dB | 41.9 dB | 60.9 dB |
+| -24 dBFS | 39.4 dB | 60.3 dB | 29.0 dB | 54.7 dB |
+| -36 dBFS | 26.3 dB | 52.7 dB | 17.7 dB | 43.8 dB |
+| -48 dBFS | 15.3 dB | 41.3 dB | 6.5 dB | 33.2 dB |
+
+A full-scale tone gains nothing, because it really does need all eight
+divisions. Everything quieter or more spread out gains up to about 26 dB, which
+is a little over 4 bits of precision. Full sweep in `docs/bfp_sqnr.csv` and
+`docs/bfp_sqnr.png`.
+
+**Cost.** In Yosys's Artix-7 mapping the engine goes from 749 to 879 cells
+before LUT packing. It uses the same 4 DSP48 blocks and the same block RAMs.
+
+**Verification.** Step 5 of `make verify` runs 39 frames back to back through
+the BFP engine and checks all 256 complex bins and the exponent of every frame
+bit-exact against the Python model. The four original tests are unchanged.
+
+**Limits.** This is still simulation only. The guard rule assumes inputs with
+complex magnitude below 1.0, the same assumption the original engine makes.
+
+---
+
 ## Architecture
 
 ```
